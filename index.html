@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E9EEF1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1A21" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="打刻ハブ">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>打刻ハブ</title>
+<style>
+/* Layout: one phone-width column. Today's two stamp slots on top, the three-step flow (VPN, site, record) in the middle, recent days below, settings folded at the bottom. */
+:root {
+  color-scheme: light;
+  --bg: #E9EEF1;
+  --surface: #FFFFFF;
+  --ink: #14212B;
+  --muted: #586873;
+  --line: #C5D0D6;
+  --accent: #0E6A70;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #D5ECEC;
+  --ok: #2B7A4B;
+  --ok-soft: #DCEFE3;
+  --warn: #A8321F;
+  --warn-soft: #F8DDD7;
+  --font-body: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', 'Yu Gothic', Meiryo, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, 'Roboto Mono', monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0F1A21;
+    --surface: #17262F;
+    --ink: #E6EEF2;
+    --muted: #93A5B0;
+    --line: #2B3E49;
+    --accent: #5CC4C8;
+    --accent-ink: #06262A;
+    --accent-soft: #153A3F;
+    --ok: #6CCB92;
+    --ok-soft: #17382A;
+    --warn: #FF9A86;
+    --warn-soft: #3F211B;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.6;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding-inline: 1rem;
+  padding-top: calc(1.25rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+}
+main { display: flex; flex-direction: column; gap: 1.5rem; }
+h1, h2, p { margin: 0; }
+h1, h2 { text-wrap: balance; }
+
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.eyebrow { font-size: .8125rem; font-weight: 700; letter-spacing: .12em; color: var(--accent); width: 100%; }
+.head h1 { font-size: 1.75rem; font-weight: 700; line-height: 1.2; flex: 1 1 auto; min-width: 0; }
+.clock { font-family: var(--font-mono); font-weight: 600; font-size: 1rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.banner { background: var(--warn-soft); color: var(--warn); border: 1.5px solid var(--warn); border-radius: .5rem; padding: .75rem 1rem; display: flex; flex-direction: column; gap: .25rem; font-weight: 500; }
+.banner p { font-size: .9375rem; }
+
+.today { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+.slot { border: 2px dashed var(--line); border-radius: .25rem; padding: .75rem; display: flex; flex-direction: column; gap: .125rem; min-width: 0; background: var(--surface); }
+.slot-label { font-size: .8125rem; font-weight: 700; letter-spacing: .12em; color: var(--muted); }
+.slot-time { font-family: var(--font-mono); font-weight: 600; font-size: 2rem; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--muted); }
+.slot-sub { font-size: .8125rem; color: var(--muted); }
+.slot.done { border: 2px solid var(--ok); background: var(--ok-soft); }
+.slot.done .slot-time, .slot.done .slot-label, .slot.done .slot-sub { color: var(--ok); }
+.slot.late { border: 2px solid var(--warn); background: var(--warn-soft); }
+.slot.late .slot-time, .slot.late .slot-label, .slot.late .slot-sub { color: var(--warn); }
+
+.flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.25rem; }
+.step { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .75rem; }
+.step-no { width: 2rem; height: 2rem; border-radius: 50%; border: 2px solid var(--accent); color: var(--accent); font-family: var(--font-mono); font-weight: 600; display: grid; place-items: center; }
+.step-body { display: flex; flex-direction: column; gap: .625rem; min-width: 0; }
+.step-body h2 { font-size: 1.0625rem; font-weight: 700; line-height: 2rem; }
+.hint { font-size: .875rem; color: var(--muted); }
+.hint a { color: var(--accent); }
+.hint.gap { margin-top: .625rem; }
+
+.btn { display: flex; align-items: center; justify-content: center; gap: .5rem; width: 100%; min-height: 3rem; padding: .75rem 1rem; border-radius: .5rem; border: 1.5px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-family: var(--font-body); font-size: 1rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn[disabled] { opacity: .5; cursor: default; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1.5px solid var(--line); border-radius: .5rem; overflow: hidden; background: var(--surface); position: relative; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { text-align: center; padding: .625rem; font-weight: 700; cursor: pointer; color: var(--muted); }
+.seg input:checked + label { background: var(--accent-soft); color: var(--accent); }
+.seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: -3px; }
+
+.time-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+.time-row label { font-size: .875rem; color: var(--muted); }
+input[type="time"], input[type="url"], input[type="text"] { font-family: var(--font-mono); font-size: 1rem; color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: .5rem; padding: .5rem .625rem; min-height: 2.75rem; min-width: 0; }
+input[type="url"], input[type="text"] { width: 100%; font-size: .9375rem; }
+
+.history h2, .settings summary { font-size: 1.0625rem; font-weight: 700; }
+.history h2 { margin-bottom: .625rem; }
+.rows { background: var(--surface); border: 1.5px solid var(--line); border-radius: .5rem; overflow: hidden; }
+.row { display: grid; grid-template-columns: 4.5rem 1fr 1fr auto; gap: .5rem; align-items: center; padding: .625rem .75rem; border-top: 1px solid var(--line); }
+.rows > .row:first-child { border-top: 0; }
+.row .d { font-family: var(--font-mono); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.row .d small { font-family: var(--font-body); color: var(--muted); font-size: .8125rem; margin-left: .25rem; }
+.row .t { font-family: var(--font-mono); font-size: .9375rem; font-variant-numeric: tabular-nums; }
+.row .none { grid-column: 2 / 4; color: var(--warn); font-weight: 700; font-size: .875rem; }
+.row .wait { grid-column: 2 / 4; color: var(--muted); font-size: .875rem; }
+.row .off { grid-column: 2 / 4; color: var(--muted); font-size: .875rem; }
+.row.miss { background: var(--warn-soft); }
+.row.part .t.empty { color: var(--warn); }
+.mini { font-family: var(--font-body); font-size: .8125rem; font-weight: 700; color: var(--accent); background: transparent; border: 1.5px solid var(--line); border-radius: .5rem; padding: .25rem .625rem; min-height: 2rem; cursor: pointer; }
+.empty-note { padding: .875rem .75rem; color: var(--muted); font-size: .9375rem; }
+
+.editor { padding: .75rem; border-top: 1px solid var(--line); background: var(--accent-soft); display: flex; flex-direction: column; gap: .75rem; }
+.editor .fields { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+.editor .fields label { display: flex; flex-direction: column; gap: .25rem; font-size: .8125rem; color: var(--muted); }
+.editor .fields label.check { flex-direction: row; align-items: center; gap: .5rem; font-size: .9375rem; color: var(--ink); }
+.editor .actions { display: flex; gap: .625rem; }
+.editor .actions .btn { min-height: 2.75rem; }
+
+.settings { background: var(--surface); border: 1.5px solid var(--line); border-radius: .5rem; padding: .75rem 1rem; }
+.settings summary { cursor: pointer; min-height: 2rem; display: flex; align-items: center; }
+.settings .fields { display: flex; flex-direction: column; gap: 1rem; padding-block: .75rem .25rem; }
+.settings .field { display: flex; flex-direction: column; gap: .375rem; }
+.settings .field > span { font-size: .875rem; font-weight: 700; }
+.settings .pair { display: flex; gap: 1rem; flex-wrap: wrap; }
+.settings .pair .field { flex: 1 1 8rem; }
+.settings .tools { display: flex; flex-direction: column; gap: .625rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+.settings .tools h3 { margin: 0; font-size: .9375rem; }
+
+.foot { font-size: .8125rem; color: var(--muted); text-align: center; }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); max-width: calc(100% - 2rem); background: var(--ink); color: var(--bg); padding: .625rem 1rem; border-radius: .5rem; font-weight: 500; font-size: .9375rem; }
+[hidden] { display: none !important; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .slot, .row, .btn { transition: background-color .15s, border-color .15s; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="head">
+    <p class="eyebrow">打刻ハブ</p>
+    <h1 id="dateline"></h1>
+    <span class="clock" id="clock" aria-label="現在時刻"></span>
+  </header>
+
+  <div class="banner" id="banner" role="status" hidden></div>
+
+  <section class="today" aria-label="今日の打刻">
+    <div class="slot" id="slot-in"></div>
+    <div class="slot" id="slot-out"></div>
+  </section>
+
+  <ol class="flow">
+    <li class="step">
+      <div class="step-no">1</div>
+      <div class="step-body">
+        <h2>VPNに接続する</h2>
+        <div id="vpn-action"></div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-no">2</div>
+      <div class="step-body">
+        <h2>職場サイトに入る</h2>
+        <div id="site-action"></div>
+      </div>
+    </li>
+    <li class="step">
+      <div class="step-no">3</div>
+      <div class="step-body">
+        <h2>サイトで打刻したら記録する</h2>
+        <div class="seg" role="radiogroup" aria-label="打刻の種類">
+          <input type="radio" name="mode" id="mode-in" value="in"><label for="mode-in">出勤</label>
+          <input type="radio" name="mode" id="mode-out" value="out"><label for="mode-out">退勤</label>
+        </div>
+        <div class="time-row">
+          <label for="punch-time">打刻した時刻</label>
+          <input type="time" id="punch-time">
+        </div>
+        <button class="btn" id="confirm" type="button">打刻した</button>
+        <p class="hint">時刻は現在時刻が入ります。あとから記録するときは直してください。</p>
+      </div>
+    </li>
+  </ol>
+
+  <section class="history" aria-label="記録">
+    <h2>今日と直近2週間</h2>
+    <div class="rows" id="history"></div>
+  </section>
+
+  <details class="settings" id="settings">
+    <summary>設定</summary>
+    <div class="fields">
+      <label class="field">
+        <span>職場サイトのURL</span>
+        <input type="url" id="set-url" placeholder="https://" inputmode="url" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>VPNアプリを開くリンク（任意）</span>
+        <input type="text" id="set-vpn" placeholder="空欄ならAndroidではf5 Accessを開きます" autocomplete="off" autocapitalize="off" spellcheck="false">
+      </label>
+      <div class="pair">
+        <label class="field">
+          <span>出勤の予定時刻</span>
+          <input type="time" id="set-in">
+        </label>
+        <label class="field">
+          <span>退勤の予定時刻</span>
+          <input type="time" id="set-out">
+        </label>
+      </div>
+      <p class="hint">予定時刻を過ぎても未記録だと、このアプリを開いたときに赤い通知が出ます。</p>
+
+      <div class="tools">
+        <h3>リマインド</h3>
+        <p class="hint">平日の出勤・退勤時刻に通知が鳴る定期予定のファイルを作ります。開くとカレンダーアプリに登録できます。通知はカレンダーアプリの機能で届くため、このアプリを開いていなくても鳴ります。</p>
+        <button class="btn ghost" id="btn-ics" type="button">カレンダー用の予定ファイルを作る</button>
+      </div>
+
+      <div class="tools">
+        <h3>記録の保存</h3>
+        <p class="hint">記録はこの端末のブラウザに保存されます。端末を変えるときや控えを残すときは、CSVで書き出してください。</p>
+        <button class="btn ghost" id="btn-csv" type="button">記録をCSVで書き出す</button>
+      </div>
+
+      <div class="tools" id="install-box">
+        <h3>ホーム画面に追加</h3>
+        <p class="hint" id="install-hint">ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選びます。</p>
+        <button class="btn ghost" id="btn-install" type="button" hidden>ホーム画面に追加する</button>
+      </div>
+    </div>
+  </details>
+
+  <p class="foot">記録はこの端末のブラウザにだけ保存されています。</p>
+</main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var pad = function (n) { return String(n).padStart(2, '0'); };
+  var ymd = function (d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); };
+  var hm = function (d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  var WD = ['日', '月', '火', '水', '木', '金', '土'];
+  var isWeekday = function (d) { var w = d.getDay(); return w > 0 && w < 6; };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var PLAY_URL = 'https://play.google.com/store/apps/details?id=com.f5.edge.client_ics';
+  var F5_INTENT = 'intent://#Intent;package=com.f5.edge.client_ics;end';
+  var LS = 'dakoku-hub-v1';
+  var DEFAULTS = { url: '', vpn: '', inTime: '08:30', outTime: '17:00' };
+
+  var state = {
+    punches: {},
+    settings: Object.assign({}, DEFAULTS),
+    editing: null,
+    modeTouched: false,
+    installEvent: null
+  };
+
+  /* ---------- storage (this browser only) ---------- */
+  function load() {
+    try {
+      var o = JSON.parse(localStorage.getItem(LS) || '{}');
+      if (o.punches && typeof o.punches === 'object') state.punches = o.punches;
+      if (o.settings && typeof o.settings === 'object') Object.assign(state.settings, o.settings);
+    } catch (e) {}
+  }
+  function persist() {
+    try { localStorage.setItem(LS, JSON.stringify({ punches: state.punches, settings: state.settings })); return true; }
+    catch (e) { return false; }
+  }
+  load();
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, 3500);
+  }
+
+  function savePunch(date, rec) {
+    var clean = {};
+    if (rec.in) clean.in = rec.in;
+    if (rec.out) clean.out = rec.out;
+    if (rec.off) clean.off = true;
+    var before = state.punches[date];
+    if (Object.keys(clean).length === 0) delete state.punches[date]; else state.punches[date] = clean;
+    if (!persist()) {
+      if (before) state.punches[date] = before; else delete state.punches[date];
+      return false;
+    }
+    return true;
+  }
+
+  /* ---------- derived values ---------- */
+  function defaultMode() {
+    var rec = state.punches[ymd(new Date())] || {};
+    return rec.in ? 'out' : 'in';
+  }
+  function todayFlags() {
+    var now = new Date();
+    var rec = state.punches[ymd(now)] || {};
+    var t = hm(now);
+    var wd = isWeekday(now) && !rec.off;
+    return {
+      now: now,
+      rec: rec,
+      lateIn: wd && !rec.in && t > state.settings.inTime,
+      lateOut: wd && !!rec.in && !rec.out && t > state.settings.outTime
+    };
+  }
+  function pastIssues() {
+    var out = [];
+    var now = new Date();
+    for (var i = 1; i <= 7 && out.length < 3; i++) {
+      var d = new Date(now); d.setDate(d.getDate() - i);
+      if (!isWeekday(d)) continue;
+      var rec = state.punches[ymd(d)];
+      var label = (d.getMonth() + 1) + '/' + d.getDate() + '（' + WD[d.getDay()] + '）';
+      if (!rec) out.push(label + 'の打刻が記録されていません');
+      else if (!rec.off && rec.in && !rec.out) out.push(label + 'の退勤が記録されていません');
+      else if (!rec.off && !rec.in && rec.out) out.push(label + 'の出勤が記録されていません');
+    }
+    return out;
+  }
+  function safeLink(s) {
+    s = (s || '').trim();
+    if (!s) return '';
+    if (!/^[a-z][a-z0-9+.\-]*:/i.test(s)) return '';
+    if (/^(javascript|data|vbscript|file):/i.test(s)) return '';
+    return s;
+  }
+
+  /* ---------- rendering ---------- */
+  function renderHead() {
+    var now = new Date();
+    $('#dateline').textContent = (now.getMonth() + 1) + '月' + now.getDate() + '日（' + WD[now.getDay()] + '）';
+    $('#clock').textContent = hm(now);
+  }
+
+  function slotHtml(label, time, sub) {
+    return '<span class="slot-label">' + label + '</span>' +
+      '<span class="slot-time">' + (time || '--:--') + '</span>' +
+      '<span class="slot-sub">' + esc(sub) + '</span>';
+  }
+
+  function renderToday() {
+    var f = todayFlags();
+    var s = state.settings;
+    var inEl = $('#slot-in'), outEl = $('#slot-out');
+    var weekend = !isWeekday(f.now);
+    inEl.className = 'slot' + (f.rec.in ? ' done' : (f.lateIn ? ' late' : ''));
+    outEl.className = 'slot' + (f.rec.out ? ' done' : (f.lateOut ? ' late' : ''));
+    var inSub = f.rec.in ? '記録済み' : (f.rec.off ? '休み' : (weekend ? '休日' : (f.lateIn ? '予定 ' + s.inTime + ' を過ぎています' : '予定 ' + s.inTime)));
+    var outSub = f.rec.out ? '記録済み' : (f.rec.off ? '休み' : (weekend ? '休日' : (!f.rec.in ? '出勤の後に記録' : (f.lateOut ? '予定 ' + s.outTime + ' を過ぎています' : '予定 ' + s.outTime))));
+    inEl.innerHTML = slotHtml('出勤', f.rec.in, inSub);
+    outEl.innerHTML = slotHtml('退勤', f.rec.out, outSub);
+  }
+
+  function renderBanner() {
+    var f = todayFlags();
+    var lines = [];
+    if (f.lateIn) lines.push('今日の出勤が未記録です（予定 ' + state.settings.inTime + '）');
+    if (f.lateOut) lines.push('今日の退勤が未記録です（予定 ' + state.settings.outTime + '）');
+    pastIssues().forEach(function (l) { lines.push(l); });
+    var el = $('#banner');
+    if (!lines.length) { el.hidden = true; el.innerHTML = ''; return; }
+    el.hidden = false;
+    el.innerHTML = lines.map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('');
+  }
+
+  function renderFlow() {
+    var isAndroid = /Android/i.test(navigator.userAgent || '');
+    var vpn = $('#vpn-action');
+    var custom = safeLink(state.settings.vpn);
+    if (custom) {
+      vpn.innerHTML = '<a class="btn ghost" href="' + esc(custom) + '">VPNアプリを開く</a>' +
+        '<p class="hint gap">開いたら接続ボタンは自分で押します。</p>';
+    } else if (isAndroid) {
+      vpn.innerHTML =
+        '<a class="btn ghost" href="' + F5_INTENT + '">f5 Access を開く</a>' +
+        '<p class="hint gap">開いたら接続ボタンは自分で押します。アプリが開かないときはホーム画面から f5 Access を起動するか、<a href="' + PLAY_URL + '" target="_blank" rel="noopener">Google Play</a>で確認してください。</p>';
+    } else {
+      vpn.innerHTML = '<p class="hint">VPNアプリを起動して、接続ボタンを押してください。スマホから開くと、アプリを開くボタンが出ます。</p>';
+    }
+    var url = (state.settings.url || '').trim();
+    var site = $('#site-action');
+    if (/^https?:\/\//i.test(url)) {
+      site.innerHTML = '<a class="btn" href="' + esc(url) + '" target="_blank" rel="noopener">職場サイトを開く</a>' +
+        '<p class="hint gap">VPNがつながってから開きます。ログインと打刻は自分で行います。</p>';
+    } else {
+      site.innerHTML = '<button class="btn ghost" type="button" id="goto-settings">職場サイトのURLを設定する</button>';
+      $('#goto-settings').addEventListener('click', function () {
+        $('#settings').open = true;
+        $('#set-url').focus();
+      });
+    }
+    if (!state.modeTouched) $('#mode-' + defaultMode()).checked = true;
+    updateConfirm();
+  }
+
+  function currentMode() { return $('#mode-out').checked ? 'out' : 'in'; }
+  function updateConfirm() {
+    $('#confirm').textContent = (currentMode() === 'out' ? '退勤' : '出勤') + 'を打刻した';
+  }
+
+  function rowHtml(d, isToday) {
+    var key = ymd(d);
+    var rec = state.punches[key];
+    var cls = 'row';
+    var cells;
+    if (!rec) { if (!isToday) cls += ' miss'; }
+    else if (!rec.off && !isToday && (!rec.in || !rec.out)) cls += ' part';
+    var date = '<span class="d">' + (d.getMonth() + 1) + '/' + d.getDate() + '<small>' + (isToday ? '今日' : WD[d.getDay()]) + '</small></span>';
+    if (!rec) cells = isToday ? '<span class="wait">未記録</span>' : '<span class="none">打刻なし</span>';
+    else if (rec.off) cells = '<span class="off">休み</span>';
+    else cells =
+      '<span class="t' + (rec.in ? '' : ' empty') + '">' + (rec.in || '--:--') + '</span>' +
+      '<span class="t' + (rec.out ? '' : ' empty') + '">' + (rec.out || '--:--') + '</span>';
+    var html = '<div class="' + cls + '">' + date + cells +
+      '<button class="mini" type="button" data-act="edit" data-date="' + key + '">' + (rec ? '修正' : '入力') + '</button></div>';
+    if (state.editing === key) {
+      var r = rec || {};
+      html += '<div class="editor" data-date="' + key + '">' +
+        '<div class="fields">' +
+        '<label>出勤<input type="time" data-f="in" value="' + esc(r.in || '') + '"></label>' +
+        '<label>退勤<input type="time" data-f="out" value="' + esc(r.out || '') + '"></label>' +
+        '<label class="check"><input type="checkbox" data-f="off"' + (r.off ? ' checked' : '') + '>休みの日</label>' +
+        '</div>' +
+        '<div class="actions"><button class="btn" type="button" data-act="save" data-date="' + key + '">保存</button>' +
+        '<button class="btn ghost" type="button" data-act="cancel">閉じる</button></div>' +
+        '</div>';
+    }
+    return html;
+  }
+
+  function renderHistory() {
+    var now = new Date();
+    var parts = [];
+    for (var i = 0; i <= 14; i++) {
+      var d = new Date(now); d.setDate(d.getDate() - i);
+      if (i > 0 && !isWeekday(d) && !state.punches[ymd(d)]) continue;
+      if (i === 0 && !isWeekday(d) && !state.punches[ymd(d)]) continue;
+      parts.push(rowHtml(d, i === 0));
+    }
+    $('#history').innerHTML = parts.length ? parts.join('') : '<p class="empty-note">まだ記録がありません。</p>';
+  }
+
+  function fillSettings() {
+    var pairs = [['#set-url', state.settings.url || ''], ['#set-vpn', state.settings.vpn || ''], ['#set-in', state.settings.inTime], ['#set-out', state.settings.outTime]];
+    pairs.forEach(function (p) {
+      var el = $(p[0]);
+      if (document.activeElement !== el) el.value = p[1];
+    });
+  }
+
+  function renderAll() {
+    renderHead(); renderToday(); renderBanner(); renderFlow(); renderHistory();
+  }
+
+  /* ---------- downloads ---------- */
+  function download(name, text, type) {
+    var blob = new Blob([text], { type: type });
+    var a = document.createElement('a');
+    var href = URL.createObjectURL(blob);
+    a.href = href;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(href); }, 2000);
+  }
+
+  function foldLine(line) {
+    var enc = new TextEncoder();
+    var out = '', cur = '', bytes = 0;
+    for (var ch of line) {
+      var b = enc.encode(ch).length;
+      if (bytes + b > 72) { out += cur + '\r\n '; cur = ''; bytes = 1; }
+      cur += ch; bytes += b;
+    }
+    return out + cur;
+  }
+  function icsText(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  }
+  function icsLocal(d) {
+    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
+  }
+
+  function buildIcs() {
+    var appUrl = location.origin + location.pathname;
+    var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+    var first = new Date();
+    while (!isWeekday(first)) first.setDate(first.getDate() + 1);
+    var kinds = [
+      { id: 'in', label: '出勤', time: state.settings.inTime },
+      { id: 'out', label: '退勤', time: state.settings.outTime }
+    ];
+    var lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//dakoku-hub//JA', 'CALSCALE:GREGORIAN'];
+    kinds.forEach(function (k) {
+      var p = k.time.split(':');
+      var start = new Date(first.getFullYear(), first.getMonth(), first.getDate(), Number(p[0]), Number(p[1]), 0);
+      var end = new Date(start.getTime() + 10 * 60000);
+      var desc = k.label + 'の打刻の時間です。\n1. VPNに接続\n2. 職場サイトで打刻\n3. 打刻ハブで記録\n' + appUrl;
+      lines.push(
+        'BEGIN:VEVENT',
+        'UID:dakoku-' + k.id + '-' + Date.now() + '@dakoku-hub',
+        'DTSTAMP:' + stamp,
+        'DTSTART:' + icsLocal(start),
+        'DTEND:' + icsLocal(end),
+        'RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+        'SUMMARY:' + icsText(k.label + 'の打刻'),
+        'DESCRIPTION:' + icsText(desc),
+        'URL:' + appUrl,
+        'BEGIN:VALARM',
+        'ACTION:DISPLAY',
+        'DESCRIPTION:' + icsText(k.label + 'の打刻'),
+        'TRIGGER:PT0S',
+        'END:VALARM',
+        'END:VEVENT'
+      );
+    });
+    lines.push('END:VCALENDAR');
+    return lines.map(foldLine).join('\r\n') + '\r\n';
+  }
+
+  function buildCsv() {
+    var rows = ['日付,出勤,退勤,休み'];
+    Object.keys(state.punches).sort().forEach(function (k) {
+      var r = state.punches[k];
+      rows.push([k, r.in || '', r.out || '', r.off ? '休み' : ''].join(','));
+    });
+    return '\uFEFF' + rows.join('\r\n') + '\r\n';
+  }
+
+  /* ---------- events ---------- */
+  document.querySelectorAll('input[name="mode"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      state.modeTouched = true;
+      $('#punch-time').value = hm(new Date());
+      updateConfirm();
+    });
+  });
+
+  $('#confirm').addEventListener('click', function () {
+    var mode = currentMode();
+    var now = new Date();
+    var date = ymd(now);
+    var time = $('#punch-time').value || hm(now);
+    var rec = Object.assign({}, state.punches[date] || {});
+    rec[mode] = time;
+    delete rec.off;
+    if (savePunch(date, rec)) {
+      toast((mode === 'out' ? '退勤 ' : '出勤 ') + time + ' を記録しました');
+      state.modeTouched = false;
+      $('#punch-time').value = hm(new Date());
+    } else {
+      toast('保存できませんでした。ブラウザの保存が許可されているか確認してください。');
+    }
+    renderAll();
+  });
+
+  $('#history').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-act]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-act');
+    var key = btn.getAttribute('data-date');
+    if (act === 'edit') { state.editing = state.editing === key ? null : key; renderHistory(); return; }
+    if (act === 'cancel') { state.editing = null; renderHistory(); return; }
+    if (act === 'save') {
+      var box = btn.closest('.editor');
+      var rec = {
+        in: box.querySelector('[data-f="in"]').value,
+        out: box.querySelector('[data-f="out"]').value,
+        off: box.querySelector('[data-f="off"]').checked
+      };
+      if (rec.off) { rec.in = ''; rec.out = ''; }
+      if (savePunch(key, rec)) { state.editing = null; toast('保存しました'); }
+      else toast('保存できませんでした');
+      renderAll();
+    }
+  });
+
+  function onSettingChange(field, el) {
+    var v = el.value.trim();
+    if (field === 'url') {
+      if (v && !/^https?:\/\//i.test(v)) {
+        toast('https:// から始まるURLを入力してください');
+        el.value = state.settings.url || '';
+        return;
+      }
+    } else if (field === 'vpn') {
+      if (v && !safeLink(v)) {
+        toast('このリンクは使えません。intent:// や https:// から始まるリンクを入力してください');
+        el.value = state.settings.vpn || '';
+        return;
+      }
+    } else if (!v) {
+      el.value = state.settings[field];
+      return;
+    }
+    if (state.settings[field] === v) return;
+    var prev = state.settings[field];
+    state.settings[field] = v;
+    if (persist()) toast('設定を保存しました');
+    else { state.settings[field] = prev; el.value = prev; toast('保存できませんでした'); }
+    renderAll();
+  }
+  $('#set-url').addEventListener('change', function (e) { onSettingChange('url', e.target); });
+  $('#set-vpn').addEventListener('change', function (e) { onSettingChange('vpn', e.target); });
+  $('#set-in').addEventListener('change', function (e) { onSettingChange('inTime', e.target); });
+  $('#set-out').addEventListener('change', function (e) { onSettingChange('outTime', e.target); });
+
+  $('#btn-ics').addEventListener('click', function () {
+    download('dakoku-reminder.ics', buildIcs(), 'text/calendar;charset=utf-8');
+    toast('予定ファイルを作りました。開いてカレンダーに登録してください');
+  });
+  $('#btn-csv').addEventListener('click', function () {
+    download('dakoku-records.csv', buildCsv(), 'text/csv;charset=utf-8');
+    toast('CSVを書き出しました');
+  });
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    state.installEvent = e;
+    $('#btn-install').hidden = false;
+    $('#install-hint').hidden = true;
+  });
+  $('#btn-install').addEventListener('click', function () {
+    var e = state.installEvent;
+    if (!e) return;
+    e.prompt();
+    e.userChoice.then(function () { state.installEvent = null; $('#btn-install').hidden = true; $('#install-hint').hidden = false; });
+  });
+  window.addEventListener('appinstalled', function () { toast('ホーム画面に追加しました'); });
+
+  /* ---------- start ---------- */
+  $('#punch-time').value = hm(new Date());
+  fillSettings();
+  renderAll();
+  setInterval(function () { renderHead(); renderToday(); renderBanner(); }, 60000);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { renderHead(); renderToday(); renderBanner(); renderFlow(); if (!state.editing) renderHistory(); }
+  });
+
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    });
+  }
+})();
+</script>
+</body>
+</html>
